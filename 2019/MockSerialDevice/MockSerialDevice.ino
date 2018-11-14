@@ -1,34 +1,30 @@
-float mockVoltage = 36;
-float mockCurrent = 5;
-int counter = 0;
-
+float mockVoltage = 0;
+float moveDir = 0.01;
+int count = 0;
 
 void setup() {
   Serial.begin(115200);
+  pinMode(11,OUTPUT);
 }
 
 void loop() {
-  Serial.println("bmvShuntVoltage:"+String(mockVoltage));
-  Serial.println("bmvShuntCurrent:"+String(mockCurrent));
-  Serial.println("debug1:"+String(counter++));
+  Serial.println(String(mockVoltage*36));
+  analogWrite(11,mockVoltage*mockVoltage*255);
 
-  int moveSize = 5;
-  mockVoltage += random(-moveSize,moveSize+1);
-  mockCurrent += random(-moveSize,moveSize+1);
-
-  if (mockVoltage < 30){
-    mockVoltage = 30;
+  if (count < 30){
+    mockVoltage += moveDir;
+  }
+  
+  if (mockVoltage > 1){
+    mockVoltage = 1;
+    moveDir *= -1;
+  }
+  
+  if (mockVoltage < 0){
+    mockVoltage = 0;
+    moveDir *= -1;
+    count++;
   }
 
-  if (mockVoltage > 40){
-    mockVoltage = 40;
-  }
-  if (mockCurrent < 0){
-    mockCurrent = 0;
-  }
-
-  if (mockCurrent > 10){
-    mockCurrent = 10;
-  }
-  delay(1000);
+  delay(10);
 }
