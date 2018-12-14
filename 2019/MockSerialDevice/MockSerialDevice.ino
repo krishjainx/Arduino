@@ -8,7 +8,7 @@ void setup() {
 }
 
 void loop() {
-  Serial.println(String(mockVoltage*36));
+  Serial.println("bmvVoltage:"+String(mockVoltage*50));
   analogWrite(11,mockVoltage*mockVoltage*255);
 
   if (count < 30){
@@ -26,5 +26,5 @@ void loop() {
     count++;
   }
 
-  delay(10);
+  delay(50);
 }
