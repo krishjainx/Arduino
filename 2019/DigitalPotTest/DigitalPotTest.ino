@@ -10,8 +10,10 @@ void setup() {
 }
 
 void loop() {
-  digitalPotWrite(map(analogRead(A0),0,1023,0,255));
-  delay(10);
+  for (int i = 0; i < 255; i++){
+    digitalPotWrite(i);
+    delay(100);
+  }
 }
 
 
