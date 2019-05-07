@@ -43,7 +43,7 @@ float gpsSpeedKnots;
 
 
 // Telemetry Protocol Setup
-//GPSIMUNode gpsImuNode(&Serial);
+GPSIMUNode gpsImuNode(&Serial);
 
 void setup() {
   pinMode(9, OUTPUT);
@@ -79,11 +79,11 @@ void loop() {
   imuAvgYaw /= rollingAverageSize;
   imuAvgRoll /= rollingAverageSize;
 
-  /*
   gpsImuNode.imuPitch = imuAvgPitch;
-  gpsImuNode.imuYaw = imuAvgYaw;
+  //gpsImuNode.imuYaw = imuAvgYaw;
   gpsImuNode.imuRoll = imuAvgRoll;
-    gpsImuNode.numSatellites = gpsNumSatellites;
+  gpsImuNode.fix = gpsFix;
+  gpsImuNode.numSatellites = gpsNumSatellites;
     
   if (gpsFix){
     gpsImuNode.latitude = gpsLatitude;
@@ -97,8 +97,7 @@ void loop() {
     //gpsImuNode.numSatellites = 0;
     gpsImuNode.heading = 0;
   }
-  //gpsImuNode.update();
-  */
+  gpsImuNode.update();
   
   //Serial.print(String(imuAvgPitch)+" ");
   //Serial.print(String(imuAvgYaw)+" ");
