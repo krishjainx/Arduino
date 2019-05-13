@@ -3,65 +3,151 @@
 #include <Adafruit_LSM303_U.h>
 #include <Adafruit_L3GD20_U.h>
 #include <Adafruit_9DOF.h>
+#include <Adafruit_GPS.h>
+#include <telemetryNode.h>
 
-
+// Initialize 9-DOF Sensor
 Adafruit_9DOF                 dof   = Adafruit_9DOF();
 Adafruit_LSM303_Accel_Unified accel = Adafruit_LSM303_Accel_Unified(30301);
 Adafruit_LSM303_Mag_Unified   mag   = Adafruit_LSM303_Mag_Unified(30302);
 float seaLevelPressure = SENSORS_PRESSURE_SEALEVELHPA;
 
+// Initialize GPS
+#define GPSSerial Serial1
+Adafruit_GPS GPS(&GPSSerial);
+
+// State variables
 boolean hasAccelerometer;
 boolean hasMag;
+boolean hasGps;
+boolean hasNewGpsPacket;
+
+// IMU variables
+unsigned long imuTimer = millis();
+const int imuRollingAverageSize = 16;
+int imuRollingAverageIndex = 0;
+float imuPitch[imuRollingAverageSize]; // Pitch axis
+float imuYaw[imuRollingAverageSize]; // Yaw axis
+float imuRoll[imuRollingAverageSize]; // Roll axis
+float imuAvgPitch;
+float imuAvgYaw;
+float imuAvgRoll;
+
+// Telemetry Protocol Setup
+GPSIMUNode gpsImuNode(&Serial);
+
+uint32_t timer = millis();
 
 void setup() {
+  pinMode(9, OUTPUT);
+  digitalWrite(9, HIGH);
 
+  Serial.begin(115200);
+
+  initIMU();
+  initGPS();
+  
+  digitalWrite(9, LOW);
 }
 
 void loop() {
-sensors_event_t accel_event;
+  pollIMU();
+  pollGPS();
+
+  // Blink status LED
+  if (GPS.fix){
+    digitalWrite(9, (millis() % 100) > 50);
+  } else {
+    digitalWrite(9, (millis() % 2000) < 1000);
+  }
+
+  // Set variables for the telemetry system
+  gpsImuNode.imuPitch = imuAvgPitch;
+  gpsImuNode.imuRoll = imuAvgRoll;
+  if (hasNewGpsPacket){
+    gpsImuNode.fix = (int)GPS.fix; // byte
+    if (GPS.fix){
+      gpsImuNode.numSatellites = GPS.satellites; // byte
+      gpsImuNode.latitude = GPS.latitudeDegrees; // float
+      gpsImuNode.longitude = GPS.longitudeDegrees; // float
+
+      
+      gpsImuNode.speedKnots = GPS.speed; // float
+      gpsImuNode.heading = constrain(map(GPS.angle,0,360,0,255),0,255); // byte
+    }
+  }
+
+  gpsImuNode.update();
+}
+
+void initIMU(){
+  hasAccelerometer = accel.begin();
+  hasMag = mag.begin();
+}
+
+void pollIMU(){
+  // only poll the imu 10 times a second
+  if (millis() - imuTimer < 100){
+    return;
+  }
+  sensors_event_t accel_event;
   sensors_event_t mag_event;
   sensors_vec_t   orientation;
 
-  /* Calculate pitch and roll from the raw accelerometer data */
-  accel.getEvent(&accel_event);
-  if (dof.accelGetOrientation(&accel_event, &orientation))
-  {
-    /* 'orientation' should have valid .roll and .pitch fields */
-    Serial.print(F("Roll: "));
-    Serial.print(orientation.roll);
-    Serial.print(F("; "));
-    Serial.print(F("Pitch: "));
-    Serial.print(orientation.pitch);
-    Serial.print(F("; "));
-  }
-  
-  /* Calculate the heading using the magnetometer */
-  mag.getEvent(&mag_event);
-  if (dof.magGetOrientation(SENSOR_AXIS_Z, &mag_event, &orientation))
-  {
-    /* 'orientation' should have valid .heading data now */
-    Serial.print(F("Heading: "));
-    Serial.print(orientation.heading);
-    Serial.print(F("; "));
+  // Poll raw IMU values
+  if (hasAccelerometer & hasMag){
+    accel.getEvent(&accel_event);
+    mag.getEvent(&mag_event);
+    if (dof.accelGetOrientation(&accel_event, &orientation)){
+      imuRoll[imuRollingAverageIndex] = orientation.roll;
+      imuPitch[imuRollingAverageIndex] = orientation.pitch;
+    }
+    if (dof.magTiltCompensation(SENSOR_AXIS_Z, &mag_event, &accel_event)){
+      if (dof.magGetOrientation(SENSOR_AXIS_Z, &mag_event, &orientation)){
+        imuYaw[imuRollingAverageIndex] = orientation.heading;
+      }
+    }
   }
 
-  Serial.println(F(""));
-  delay(1000);
+  // Average IMU values
+  imuAvgPitch = 0;
+  imuAvgYaw = 0;
+  imuAvgRoll = 0;
+  for (int i = 0; i < imuRollingAverageSize; i++){
+    imuAvgPitch += imuPitch[i];
+    imuAvgYaw += imuYaw[i];
+    imuAvgRoll += imuRoll[i];
+  }
+  imuAvgPitch /= imuRollingAverageSize;
+  imuAvgYaw /= imuRollingAverageSize;
+  imuAvgRoll /= imuRollingAverageSize;
+
+  imuRollingAverageIndex++;
+  if (imuRollingAverageIndex >= imuRollingAverageSize){
+    imuRollingAverageIndex = 0;
+  }
 }
 
-void initSensors()
-{
-  if(!accel.begin())
-  {
-    /* There was a problem detecting the LSM303 ... check your connections */
-    Serial.println(F("Ooops, no LSM303 detected ... Check your wiring!"));
-    while(1);
+void initGPS(){
+  GPS.begin(9600);
+  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
+  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_5HZ);
+  GPS.sendCommand(PGCMD_ANTENNA);
+  GPSSerial.println(PMTK_Q_RELEASE);
+}
+
+void pollGPS(){
+  // Handle GPS data reading
+  while (Serial1.available()){
+    char c = GPS.read();
   }
-  if(!mag.begin())
-  {
-    /* There was a problem detecting the LSM303 ... check your connections */
-    Serial.println("Ooops, no LSM303 detected ... Check your wiring!");
-    while(1);
+  hasNewGpsPacket = false;
+  if (GPS.newNMEAreceived()){
+    if (GPS.parse(GPS.lastNMEA())){
+      //Serial.println("GOT GPS SENTENCE");
+      //Serial.println(GPS.lastNMEA());
+      hasNewGpsPacket = true;
+    }
   }
 }
 
