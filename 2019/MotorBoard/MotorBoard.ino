@@ -1,9 +1,11 @@
+#include <telemetryNode.h>
+
+const float GEARING = .68;
 int thermistorPin = 2;
 int rpmMotorPin = 7;
 float resistor = 3300;
 volatile byte halfRevolutionsMotor;
 float rpmMotor = 0;
-float rpmProp = 0;
 float averageRpm = 0;
 float lastRpm = 0;
 unsigned int long lastMicros = 0;
@@ -11,12 +13,15 @@ unsigned int long deltaTime;
 unsigned int long lastMicrosRpmMotor = 0;
 bool seenTick = false;
 
+MotorBoardNode motorBoard(&Serial);
+
 void setup() {
-  Serial.begin(9600);
+  motorBoard.begin(115200);
   attachInterrupt(digitalPinToInterrupt(rpmMotorPin), countRpmMotor, FALLING);
 }
 
 void loop() {
+  
   if (abs(micros() - lastMicrosRpmMotor) > 5000000){
     seenTick = true;
     averageRpm = 0;
@@ -29,14 +34,12 @@ void loop() {
         findRpm();
       }
       seenTick = false;
-
-      Serial.println("motorTemp: " + String(findTemperature (thermistorPin)));
-      Serial.println("motorRpm: " + String(averageRpm));
-      //Serial.println(String(averageRpm));
-      //Serial.println("propRpm: " + String(rpmProp));
-    lastMicros = micros(); // update the time counter
-    attachInterrupt(digitalPinToInterrupt(rpmMotorPin), countRpmMotor, FALLING);
+      motorBoard.motorTemp = findTemperature(thermistorPin);
+      motorBoard.motorRPM = (uint32_t) averageRpm;
+      motorBoard.propRPM = (uint32_t) GEARING*averageRpm;
+      lastMicros = micros(); // update the time counter
   }
+  motorBoard.update();
 }
 
 
@@ -49,7 +52,6 @@ void countRpmMotor(){
 void findRpm(){
   deltaTime = micros() - lastMicrosRpmMotor;
   rpmMotor = 60000000.0 / (float)deltaTime;
-  rpmProp = rpmMotor * 0.58;
 
   // Calculate average RPM
   averageRpm = (lastRpm + rpmMotor) / 2.0;
