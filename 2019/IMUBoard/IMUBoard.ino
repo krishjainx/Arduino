@@ -20,30 +20,23 @@ Adafruit_GPS GPS(&GPSSerial);
 boolean hasAccelerometer;
 boolean hasMag;
 boolean hasGps;
+boolean hasNewGpsPacket;
 
 // IMU variables
-const int rollingAverageSize = 16;
-int rollingAverageIndex = 0;
-float imuPitch[rollingAverageSize]; // Pitch axis
-float imuYaw[rollingAverageSize]; // Yaw axis
-float imuRoll[rollingAverageSize]; // Roll axis
+unsigned long imuTimer = millis();
+const int imuRollingAverageSize = 16;
+int imuRollingAverageIndex = 0;
+float imuPitch[imuRollingAverageSize]; // Pitch axis
+float imuYaw[imuRollingAverageSize]; // Yaw axis
+float imuRoll[imuRollingAverageSize]; // Roll axis
 float imuAvgPitch;
 float imuAvgYaw;
 float imuAvgRoll;
 
-// GPS variables
-int gpsFix;
-int gpsFixQuality;
-int gpsNumSatellites;
-float gpsLatitude;
-float gpsLongitude;
-float gpsAltitude;
-int gpsHeading; // int (0-360)
-float gpsSpeedKnots;
-
-
 // Telemetry Protocol Setup
 GPSIMUNode gpsImuNode(&Serial);
+
+uint32_t timer = millis();
 
 void setup() {
   pinMode(9, OUTPUT);
@@ -58,56 +51,33 @@ void setup() {
 }
 
 void loop() {
-  pollGPS();
   pollIMU();
-  
-  if (gpsFix){
+  pollGPS();
+
+  // Blink status LED
+  if (GPS.fix){
     digitalWrite(9, (millis() % 100) > 50);
   } else {
     digitalWrite(9, (millis() % 2000) < 1000);
   }
 
-  imuAvgPitch = 0;
-  imuAvgYaw = 0;
-  imuAvgRoll = 0;
-  for (int i = 0; i < rollingAverageSize; i++){
-    imuAvgPitch += imuPitch[i];
-    imuAvgYaw += imuYaw[i];
-    imuAvgRoll += imuRoll[i];
-  }
-  imuAvgPitch /= rollingAverageSize;
-  imuAvgYaw /= rollingAverageSize;
-  imuAvgRoll /= rollingAverageSize;
-
+  // Set variables for the telemetry system
   gpsImuNode.imuPitch = imuAvgPitch;
-  //gpsImuNode.imuYaw = imuAvgYaw;
   gpsImuNode.imuRoll = imuAvgRoll;
-  gpsImuNode.fix = gpsFix;
-  gpsImuNode.numSatellites = gpsNumSatellites;
-    
-  if (gpsFix){
-    gpsImuNode.latitude = gpsLatitude;
-    gpsImuNode.longitude = gpsLongitude;
-    gpsImuNode.speedKnots = gpsSpeedKnots;
-    gpsImuNode.heading = (int)constrain(map(gpsHeading,0,360,0,255),0,255);
-  } else {
-    gpsImuNode.latitude = 0;
-    gpsImuNode.longitude = 0;
-    gpsImuNode.speedKnots = 0;
-    //gpsImuNode.numSatellites = 0;
-    gpsImuNode.heading = 0;
+  if (hasNewGpsPacket){
+    gpsImuNode.fix = (int)GPS.fix; // byte
+    if (GPS.fix){
+      gpsImuNode.numSatellites = GPS.satellites; // byte
+      gpsImuNode.latitude = GPS.latitudeDegrees; // float
+      gpsImuNode.longitude = GPS.longitudeDegrees; // float
+
+      
+      gpsImuNode.speedKnots = GPS.speed; // float
+      gpsImuNode.heading = constrain(map(GPS.angle,0,360,0,255),0,255); // byte
+    }
   }
+
   gpsImuNode.update();
-  
-  //Serial.print(String(imuAvgPitch)+" ");
-  //Serial.print(String(imuAvgYaw)+" ");
-  //Serial.println(String(imuAvgRoll));
-  
-  rollingAverageIndex++;
-  if (rollingAverageIndex >= rollingAverageSize){
-    rollingAverageIndex = 0;
-  }
-  delay(10);
 }
 
 void initIMU(){
@@ -116,46 +86,68 @@ void initIMU(){
 }
 
 void pollIMU(){
+  // only poll the imu 10 times a second
+  if (millis() - imuTimer < 100){
+    return;
+  }
   sensors_event_t accel_event;
   sensors_event_t mag_event;
   sensors_vec_t   orientation;
 
+  // Poll raw IMU values
   if (hasAccelerometer & hasMag){
     accel.getEvent(&accel_event);
     mag.getEvent(&mag_event);
     if (dof.accelGetOrientation(&accel_event, &orientation)){
-      imuRoll[rollingAverageIndex] = orientation.roll;
-      imuPitch[rollingAverageIndex] = orientation.pitch;
+      imuRoll[imuRollingAverageIndex] = orientation.roll;
+      imuPitch[imuRollingAverageIndex] = orientation.pitch;
     }
     if (dof.magTiltCompensation(SENSOR_AXIS_Z, &mag_event, &accel_event)){
       if (dof.magGetOrientation(SENSOR_AXIS_Z, &mag_event, &orientation)){
-        imuYaw[rollingAverageIndex] = orientation.heading;
+        imuYaw[imuRollingAverageIndex] = orientation.heading;
       }
     }
+  }
+
+  // Average IMU values
+  imuAvgPitch = 0;
+  imuAvgYaw = 0;
+  imuAvgRoll = 0;
+  for (int i = 0; i < imuRollingAverageSize; i++){
+    imuAvgPitch += imuPitch[i];
+    imuAvgYaw += imuYaw[i];
+    imuAvgRoll += imuRoll[i];
+  }
+  imuAvgPitch /= imuRollingAverageSize;
+  imuAvgYaw /= imuRollingAverageSize;
+  imuAvgRoll /= imuRollingAverageSize;
+
+  imuRollingAverageIndex++;
+  if (imuRollingAverageIndex >= imuRollingAverageSize){
+    imuRollingAverageIndex = 0;
   }
 }
 
 void initGPS(){
   GPS.begin(9600);
   GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
-  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
+  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_5HZ);
   GPS.sendCommand(PGCMD_ANTENNA);
+  GPSSerial.println(PMTK_Q_RELEASE);
 }
 
 void pollGPS(){
-  char c = GPS.read();
-  if (GPS.newNMEAreceived()){
-    GPS.parse(GPS.lastNMEA());
+  // Handle GPS data reading
+  while (Serial1.available()){
+    char c = GPS.read();
   }
-  gpsFix = GPS.fix;
-  gpsFixQuality = GPS.fixquality;
-  gpsNumSatellites = GPS.satellites;
-  if (gpsFix){
-    gpsLatitude = GPS.latitude;
-    gpsLongitude = GPS.longitude;
-    gpsAltitude = GPS.altitude;
-    gpsHeading = GPS.angle;
-    gpsSpeedKnots = GPS.speed;
+  hasNewGpsPacket = false;
+  if (GPS.newNMEAreceived()){
+    if (GPS.parse(GPS.lastNMEA())){
+      //Serial.println("GOT GPS SENTENCE");
+      //Serial.println(GPS.lastNMEA());
+      hasNewGpsPacket = true;
+    }
   }
 }
 
