@@ -2,6 +2,7 @@
 
 float rawThrottle = 0;
 bool throttleMode = false;
+int deadzoneSize = 10;
 
 ThrottleNode throttleNode(&Serial);
 
@@ -16,15 +17,19 @@ void setup() {
 
 void loop() {
   
-  rawThrottle = analogRead(A1) / 1024.0;
-  rawThrottle = rawThrottle * rawThrottle;
-  throttleMode = !digitalRead(10);
+  // Add dead zone on either end when reading throttle
+  // Bottom and top have area where they are mapped to 0 and 255
+  // this corrects for minor errors in sensing so it's easier to have 
+  // throttle *completely off* or *completely on*
+  rawThrottle = map(analogRead(A1),0 + deadzoneSize,1023 - deadzoneSize,0,255);
+  throttleNode.throt = (uint16_t)constrain(rawThrottle,0,255);
   
-  digitalWrite(6,throttleMode);
-  analogWrite(9,rawThrottle * 255);
+  throttleMode = !digitalRead(10);
 
-  throttleNode.throt = (uint16_t)constrain(rawThrottle * 255,0,255);
+  // Write status LEDs
+  digitalWrite(6,throttleMode);
+  analogWrite(9,throttleNode.throt);
+
   throttleNode.update();
-  delay(10);
 }
 
