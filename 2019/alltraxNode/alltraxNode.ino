@@ -10,8 +10,8 @@
  */
 
 #include <SPI.h>
-#include <telemetryNode.h>
-AlltraxNode testNode(&Serial); //Telemetry node instance
+#include <statelessTelemetryNode.h>
+AlltraxNode testNode(&Serial,100); //Telemetry node instance
 
 const int slaveSelectPin = 10; //Digital pot CS pin
 const byte RELAY_PIN = 8; //turn controller on|off
@@ -48,17 +48,18 @@ void setup() {
 
   //Initialize Relay
   pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW);
+  digitalWrite(RELAY_PIN, HIGH);
 }
 
 void loop() {
-
+  /*
   if(!testNode.isConnected()){
     digitalPotWrite(0x00);
     digitalWrite(RELAY_PIN,LOW);
   }else{
     digitalWrite(RELAY_PIN,HIGH);
   }
+  */
 
   /*
   //Poll Controller for values

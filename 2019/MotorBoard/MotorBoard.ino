@@ -1,7 +1,12 @@
-#include <telemetryNode.h>
+#include <statelessTelemetryNode.h>
+
+
+const byte RED_PIN = 3;
+const byte GREEN_PIN = 6;
+const byte BLUE_PIN = 5;
 
 const float GEARING = .68;
-int thermistorPin = 2;
+int thermistorPin = 0;
 int rpmMotorPin = 7;
 float resistor = 3300;
 volatile byte halfRevolutionsMotor;
@@ -13,15 +18,18 @@ unsigned int long deltaTime;
 unsigned int long lastMicrosRpmMotor = 0;
 bool seenTick = false;
 
-MotorBoardNode motorBoard(&Serial);
+MotorBoardNode motorBoard(&Serial,100);
 
 void setup() {
   motorBoard.begin(115200);
   attachInterrupt(digitalPinToInterrupt(rpmMotorPin), countRpmMotor, FALLING);
+  pinMode(RED_PIN,OUTPUT);
+  pinMode(GREEN_PIN,OUTPUT);
+  pinMode(BLUE_PIN,OUTPUT);
+  digitalWrite(GREEN_PIN, HIGH);
 }
 
 void loop() {
-  
   if (abs(micros() - lastMicrosRpmMotor) > 5000000){
     seenTick = true;
     averageRpm = 0;
@@ -35,8 +43,8 @@ void loop() {
       }
       seenTick = false;
       motorBoard.motorTemp = findTemperature(thermistorPin);
-      motorBoard.motorRPM = (uint32_t) averageRpm;
-      motorBoard.propRPM = (uint32_t) GEARING*averageRpm;
+      motorBoard.motorRPM = (int) averageRpm;
+      motorBoard.propRPM = (int) (GEARING*averageRpm);
       lastMicros = micros(); // update the time counter
   }
   motorBoard.update();
