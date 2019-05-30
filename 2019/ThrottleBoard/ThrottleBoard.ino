@@ -1,10 +1,10 @@
-#include <telemetryNode.h>
+#include <statelessTelemetryNode.h>
 
 float rawThrottle = 0;
 bool throttleMode = false;
 int deadzoneSize = 10;
 
-ThrottleNode throttleNode(&Serial);
+ThrottleNode throttleNode(&Serial,100);
 
 void setup() {
   pinMode(5,OUTPUT); //yellow

@@ -9,11 +9,15 @@ U8G2_SH1106_128X64_NONAME_F_4W_HW_SPI disp2(U8G2_R0, /* cs=*/ 9, /* dc=*/ 8, /* 
 void setup() {
   disp1.begin();
   disp2.begin();
+  pinMode(10,OUTPUT);
+  pinMode(3,OUTPUT);
+  digitalWrite(10,HIGH);
 }
 
 int y = 0;
 
 void loop() {
+  analogWrite(3,millis()/30 % 255);
   disp1.clearBuffer();
   disp1.setFont(u8g2_font_logisoso32_tr);
   disp1.drawStr(y - 256,32,"BIG PEE PEE");

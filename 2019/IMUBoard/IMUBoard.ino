@@ -4,7 +4,7 @@
 #include <Adafruit_L3GD20_U.h>
 #include <Adafruit_9DOF.h>
 #include <Adafruit_GPS.h>
-#include <telemetryNode.h>
+#include <statelessTelemetryNode.h>
 
 // Initialize 9-DOF Sensor
 Adafruit_9DOF                 dof   = Adafruit_9DOF();
@@ -34,7 +34,7 @@ float imuAvgYaw;
 float imuAvgRoll;
 
 // Telemetry Protocol Setup
-GPSIMUNode gpsImuNode(&Serial);
+GPSIMUNode gpsImuNode(&Serial,100);
 
 uint32_t timer = millis();
 
