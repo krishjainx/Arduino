@@ -48,7 +48,7 @@ void setup() {
 
   //Initialize Relay
   pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, HIGH);
+  digitalWrite(RELAY_PIN, LOW);
 }
 
 void loop() {
@@ -72,6 +72,9 @@ void loop() {
   
   //Write Throttle value
   digitalPotWrite(testNode.throt);
+
+  // Write relay value based on throttle enable
+  digitalWrite(RELAY_PIN, testNode.enable);
 
   //Telemetry update
   testNode.update(); //Necessary to stream to telemetry server
